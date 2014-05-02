@@ -1,4 +1,4 @@
-import Stateful hiding (Stateful, evaluate)
+import Stateful hiding (Stateful, evaluate, unary, binary)
 import Base
 import StatefulCheckedMonad 
 import StatefulParse
@@ -15,9 +15,16 @@ t2 = parseExp ("var x = mutable 3;"++
 
 t3 = parseExp ("var x = mutable 3;"++
      "var y = mutable 7;"++
-     "x = @x - @x;"++
-     "y = @y / @x;" ++ "@y")
+     "x = z")
+
+t4 = parseExp ("var x = 3 + true;x")
+
+t5 = parseExp ("var f = function(a) {if (a > 0) { -a*2 } else { -a } };"++
+  "var x = mutable -2;"++
+  "var y = mutable 3;"++
+  "f(@x) + f(@y)")
 
 main = do
   test "evaluate" execute t1
   test "evaluate" execute t3
+  test "evaluate" execute t4

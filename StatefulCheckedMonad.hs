@@ -1,9 +1,9 @@
-module StatefulMonad where
+module StatefulCheckedMonad where
 
 import Prelude hiding (LT, GT, EQ, id)
 import Base
 import Data.Maybe
-import Stateful hiding (Stateful, evaluate)
+import Stateful hiding (Stateful, evaluate, unary, binary)
 
 data Checked a = Good a | Error String
   deriving Show
@@ -29,11 +29,11 @@ evaluate :: Exp -> Env -> CheckedStateful Value
 evaluate (Literal v) env = return v
 evaluate (Unary op a) env = do
   av <- evaluate a env
-  return (unary op av)
+  checked_unary op av
 evaluate (Binary op a b) env = do
   av <- evaluate a env
   bv <- evaluate b env
-  return (binary op av bv)
+  checked_binary op av bv
 evaluate (If a b c) env = do
   BoolV cond <- evaluate a env
   evaluate (if cond then b else c) env
@@ -44,7 +44,9 @@ evaluate (Declare x e body) env = do    -- non-recursive case
   let newEnv = (x, ev) : env
   evaluate body newEnv
 evaluate (Variable x) env = 
-  return (fromJust (lookup x env))
+  case lookup x env of
+    Nothing -> return_error ("Variable " ++ x ++ " undefined")
+    Just v -> return v
 
 -- first-class functions
 evaluate (Function x body) env = 
@@ -83,6 +85,32 @@ readMemory i = CST (\mem-> (Good (access i mem), mem))
 --BEGIN:StatefulHelper3
 updateMemory val i = CST (\mem-> (Good (), update i val mem))
 --END:StatefulHelper3
+
+
+checked_unary :: UnaryOp -> Value -> CheckedStateful Value
+checked_unary Not (BoolV b) = return (BoolV (not b))
+checked_unary Neg (IntV i) = return (IntV (-i))
+checked_unary _ _ =  return_error ("Type Error!")
+
+checked_binary :: BinaryOp -> Value -> Value -> CheckedStateful Value
+checked_binary Add (IntV a) (IntV b) = return (IntV (a + b))
+checked_binary Sub (IntV a) (IntV b) = return (IntV (a - b))
+checked_binary Mul (IntV a) (IntV b) = return (IntV (a * b))
+checked_binary Div (IntV a) (IntV 0) = return_error ("Divide by zero")
+checked_binary Div (IntV a) (IntV b) = return (IntV (a `div` b))
+checked_binary And (BoolV a) (BoolV b) = return (BoolV (a && b))
+checked_binary Or (BoolV a) (BoolV b) = return (BoolV (a || b))
+checked_binary LT (IntV a) (IntV b) = return (BoolV (a < b))
+checked_binary LE (IntV a) (IntV b) = return (BoolV (a <= b))
+checked_binary GE (IntV a) (IntV b) = return (BoolV (a >= b))
+checked_binary GT (IntV a) (IntV b) = return (BoolV (a > b))
+checked_binary EQ a b = return (BoolV (a == b))
+checked_binary _ _ _ = return_error ("Type Error!")
+
+return_error :: String -> CheckedStateful Value
+return_error e = CST (\m -> (Error e, m))
+ 
+
 
 runStateful (CST c) = 
    let (val, mem) = c [] in val
